@@ -12,7 +12,7 @@ test('classic cloud deploy manifest stays wired to the playable multiplayer serv
   const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
 
   assert.equal(typeof packageJson.dependencies?.express, 'string');
-  assert.equal(packageJson.engines?.node, '>=20');
+  assert.equal(packageJson.engines?.node, '20.x');
   assert.equal(serverPackageJson.type, 'module');
   assert.match(renderYaml, /buildCommand: npm ci --omit=dev/);
   assert.match(renderYaml, /startCommand: npm run server/);
