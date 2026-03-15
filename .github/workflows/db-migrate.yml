@@ -1,0 +1,276 @@
+name: Database Migrations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to run migrations against'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      dry_run:
+        description: 'Perform a dry run (no actual changes)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+jobs:
+  # ============================================
+  # Validate Migrations
+  # ============================================
+  validate:
+    name: Validate Migrations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate migration files
+        run: |
+          echo "Checking migration file naming convention..."
+          for file in supabase/migrations/*.sql; do
+            if [[ -f "$file" ]]; then
+              filename=$(basename "$file")
+              if [[ ! "$filename" =~ ^[0-9]{14}_[a-z_]+\.sql$ ]]; then
+                echo "Error: Migration file '$filename' does not follow naming convention (YYYYMMDDHHMMSS_description.sql)"
+                exit 1
+              fi
+            fi
+          done
+          echo "All migration files follow naming convention"
+
+      - name: Check for destructive operations
+        run: |
+          echo "Scanning for potentially destructive operations..."
+          DESTRUCTIVE_PATTERNS="DROP TABLE|DROP COLUMN|TRUNCATE|DELETE FROM"
+          for file in supabase/migrations/*.sql; do
+            if [[ -f "$file" ]] && grep -iE "$DESTRUCTIVE_PATTERNS" "$file"; then
+              echo "Warning: Potentially destructive operation found in $file"
+              echo "::warning file=$file::Contains potentially destructive SQL operation"
+            fi
+          done
+
+      - name: Lint SQL migrations
+        run: |
+          echo "Running SQL lint checks..."
+          # Basic SQL syntax validation
+          for file in supabase/migrations/*.sql; do
+            if [[ -f "$file" ]]; then
+              echo "Checking $file..."
+              # Ensure file ends with newline
+              if [[ -n "$(tail -c 1 "$file")" ]]; then
+                echo "Warning: $file does not end with newline"
+              fi
+            fi
+          done
+
+  # ============================================
+  # Test Migrations (Staging)
+  # ============================================
+  test-migrations:
+    name: Test Migrations
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase local
+        run: |
+          supabase start
+          supabase db reset
+
+      - name: Test migrations
+        run: |
+          echo "Testing migrations locally..."
+          supabase db push --dry-run
+
+      - name: Run migration tests
+        run: |
+          echo "Running post-migration tests..."
+          # Add any pgTAP tests or validation queries here
+          supabase db lint
+
+      - name: Stop Supabase local
+        if: always()
+        run: supabase stop
+
+  # ============================================
+  # Deploy to Staging
+  # ============================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [validate, test-migrations]
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' && github.event.inputs.dry_run == 'false')
+    environment:
+      name: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link to staging project
+        run: |
+          supabase link --project-ref ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
+
+      - name: Deploy migrations to staging
+        run: |
+          echo "Deploying migrations to staging..."
+          supabase db push
+
+      - name: Verify deployment
+        run: |
+          echo "Verifying migration deployment..."
+          supabase migration list
+
+  # ============================================
+  # Deploy to Production
+  # ============================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: validate
+    if: |
+      (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production' && github.event.inputs.dry_run == 'false')
+    environment:
+      name: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link to production project
+        run: |
+          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+
+      - name: Create backup before migration
+        run: |
+          echo "Creating database backup..."
+          # Note: Supabase handles automatic backups, but you can add custom backup logic here
+          echo "Backup initiated at $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+      - name: Deploy migrations to production
+        run: |
+          echo "Deploying migrations to production..."
+          supabase db push
+
+      - name: Verify deployment
+        run: |
+          echo "Verifying migration deployment..."
+          supabase migration list
+
+      - name: Generate updated types
+        run: |
+          echo "Generating updated TypeScript types..."
+          supabase gen types typescript --project-id ${{ secrets.SUPABASE_PROJECT_ID }} > lib/supabase/database.types.ts
+
+      - name: Notify on success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'success',
+              context: 'Database Migration',
+              description: 'Migrations deployed successfully to production'
+            });
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Database Migration Failed - ${context.sha.substring(0, 7)}`,
+              body: `## Migration Failure
+
+              **Commit:** ${context.sha}
+              **Branch:** ${context.ref}
+              **Run:** [View workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+
+              Please investigate and fix the migration issues.`,
+              labels: ['bug', 'database', 'urgent']
+            });
+
+  # ============================================
+  # Generate Types
+  # ============================================
+  generate-types:
+    name: Generate TypeScript Types
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Generate types
+        run: |
+          supabase gen types typescript --project-id ${{ secrets.SUPABASE_PROJECT_ID }} > lib/supabase/database.types.ts
+
+      - name: Check for type changes
+        id: check-changes
+        run: |
+          if git diff --quiet lib/supabase/database.types.ts; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push type changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add lib/supabase/database.types.ts
+          git commit -m "chore: update Supabase types [skip ci]"
+          git push

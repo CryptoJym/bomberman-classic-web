@@ -1,0 +1,49 @@
+# =============================================================================
+# CODEOWNERS - Bomberman Online
+# =============================================================================
+# These owners will be requested for review when someone opens a pull request
+# that modifies code that they own.
+# =============================================================================
+
+# Default owners for everything
+* @jamesbrady
+
+# Frontend (Next.js, React, UI)
+/app/ @jamesbrady
+/components/ @jamesbrady
+/styles/ @jamesbrady
+
+# Game Engine (PixiJS)
+/game/ @jamesbrady
+
+# Game Server (WebSocket)
+/server/ @jamesbrady
+
+# Database (Supabase)
+/supabase/ @jamesbrady
+/lib/supabase/ @jamesbrady
+
+# Authentication (Clerk)
+/lib/clerk/ @jamesbrady
+/middleware.ts @jamesbrady
+
+# Types
+/types/ @jamesbrady
+
+# CI/CD
+/.github/ @jamesbrady
+/vercel.json @jamesbrady
+/railway.json @jamesbrady
+/Dockerfile* @jamesbrady
+/docker-compose.yml @jamesbrady
+
+# Configuration
+/package.json @jamesbrady
+/tsconfig.json @jamesbrady
+/tailwind.config.ts @jamesbrady
+/next.config.js @jamesbrady
+/.env.example @jamesbrady
+
+# Documentation
+*.md @jamesbrady
+/CLAUDE.md @jamesbrady

@@ -1,0 +1,94 @@
+# =============================================================================
+# Bomberman Online - Docker Compose Configuration
+# For local development and testing
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Game Server (WebSocket)
+  # ---------------------------------------------------------------------------
+  game-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: bomberman-game-server
+    ports:
+      - "${GAME_SERVER_PORT:-8080}:8080"
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - bomberman-network
+    depends_on:
+      - redis
+
+  # ---------------------------------------------------------------------------
+  # Redis (For scaling game servers with pub/sub)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: bomberman-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - bomberman-network
+
+  # ---------------------------------------------------------------------------
+  # Next.js Frontend (optional for full local stack)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: bomberman-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_GAME_SERVER_URL=ws://localhost:8080
+    depends_on:
+      - game-server
+    restart: unless-stopped
+    networks:
+      - bomberman-network
+    profiles:
+      - full-stack
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  bomberman-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  redis-data:
+    driver: local

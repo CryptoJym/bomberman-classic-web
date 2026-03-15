@@ -1,0 +1,22 @@
+# Railway Configuration for Bomberman Game Server
+# https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install && pnpm build:server"
+
+[deploy]
+startCommand = "pnpm start:server"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+numReplicas = 1
+sleepApplication = false
+
+# Environment variables (set in Railway dashboard for secrets)
+# PORT - automatically set by Railway
+# NODE_ENV - set to 'production'
+# CLERK_SECRET_KEY - for JWT validation
+# SUPABASE_URL - database connection
+# SUPABASE_SERVICE_ROLE_KEY - server-side DB access

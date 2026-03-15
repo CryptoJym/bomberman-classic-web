@@ -1,0 +1,6 @@
+# Sprite sheets for game graphics
+# - player.png - Character sprites (32x32, 8 characters)
+# - bomb.png - Bomb and explosion sprites
+# - tiles.png - Ground, wall, and block tiles
+# - powerups.png - Power-up icons (24x24)
+# - ui.png - UI elements and buttons

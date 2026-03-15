@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bomberman (up to 16 players)</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="topbar">
+    <div class="left">
+      <div id="title">Bomberman Classic</div>
+      <div id="status">Connecting...</div>
+    </div>
+    <div class="center">
+      <div id="hudInfo">Waiting for server state</div>
+    </div>
+    <div class="right">
+      <div id="roomBadge">Room ——</div>
+      <div id="roundInfo">Round —</div>
+      <div id="netInfo">— ms</div>
+      <button id="fullscreenBtn" title="Toggle Fullscreen">⛶</button>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div class="panel">
+      <div class="panel-title">Players</div>
+      <ul id="scoreboard"></ul>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Room</div>
+      <input id="roomInput" maxlength="8" placeholder="Room code" />
+      <div class="button-row">
+        <button id="joinRoomBtn" type="button">Join room</button>
+        <button id="copyRoomBtn" type="button">Copy link</button>
+      </div>
+      <button id="newRoomBtn" type="button" class="secondary-btn">New room</button>
+      <div id="roomHint" class="hint">Share this room code or link with friends to enter the same match.</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Your name</div>
+      <input id="nameInput" maxlength="16" placeholder="Type your name" />
+      <div class="hint">Move: WASD or arrows • Bomb: Space • Fullscreen: F</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Accessibility</div>
+      <label class="row"><input type="checkbox" id="cbMode" /> Colorblind markers</label>
+    </div>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <div id="touchControls">
+    <div id="pad" aria-label="Movement joystick">
+      <div id="padKnob" aria-hidden="true"></div>
+    </div>
+    <button id="bombBtn" aria-label="Bomb">💣</button>
+  </div>
+
+  <script type="module" src="/client.js"></script>
+</body>
+</html>
