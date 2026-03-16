@@ -17,7 +17,7 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run server:dev\"",
     "build:server": "tsc -p tsconfig.server.json",
     "test": "jest",
-    "test:classic": "node --test tests/classic-server-port.test.cjs tests/classic-client-state.test.cjs tests/classic-client-input.test.cjs tests/classic-room-code.test.cjs tests/classic-room-isolation.test.cjs tests/classic-movement-cadence.test.cjs tests/classic-turn-buffering.test.cjs tests/classic-health.test.cjs tests/classic-cloud-manifest.test.cjs",
+    "test:classic": "node --test tests/classic-server-port.test.cjs tests/classic-client-state.test.cjs tests/classic-client-input.test.cjs tests/classic-room-code.test.cjs tests/classic-room-isolation.test.cjs tests/classic-movement-cadence.test.cjs tests/classic-turn-buffering.test.cjs tests/classic-health.test.cjs tests/classic-cloud-manifest.test.cjs tests/classic-mobile-layout.test.cjs",
     "test:watch": "jest --watch",
     "test:e2e": "playwright test",
     "db:generate": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > lib/supabase/types.ts",

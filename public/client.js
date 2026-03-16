@@ -12,6 +12,10 @@ import {
   readRoomCodeFromLocation,
 } from './client-room.mjs';
 import {
+  computeViewportLayout,
+  isMobileViewport,
+} from './client-layout.mjs';
+import {
   advanceVisualState,
   buildTextSnapshot,
   syncVisualState,
@@ -34,6 +38,10 @@ import {
   const newRoomBtn = document.getElementById('newRoomBtn');
   const roomHintEl = document.getElementById('roomHint');
   const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const shareRoomBtn = document.getElementById('shareRoomBtn');
+  const toolsBtn = document.getElementById('toolsBtn');
+  const closeToolsBtn = document.getElementById('closeToolsBtn');
+  const sidebarBackdrop = document.getElementById('sidebarBackdrop');
   const colorblindToggle = document.getElementById('cbMode');
   const pad = document.getElementById('pad');
   const padKnob = document.getElementById('padKnob');
@@ -54,6 +62,7 @@ import {
   let reconnectTimer = null;
   let reconnectImmediately = false;
   let currentRoomCode = null;
+  let mobilePanelOpen = false;
 
   const keys = new Set();
   const controlKeys = new Set([
@@ -74,6 +83,7 @@ import {
   }
 
   function resize() {
+    syncViewportMode();
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(canvas.clientWidth * dpr);
     canvas.height = Math.floor(canvas.clientHeight * dpr);
@@ -84,6 +94,30 @@ import {
   function resetPadKnob() {
     if (padKnob) {
       padKnob.style.transform = 'translate(-50%, -50%)';
+    }
+  }
+
+  function setMobilePanelOpen(open) {
+    const nextOpen = Boolean(open) && isMobileViewport(window.innerWidth);
+    mobilePanelOpen = nextOpen;
+    document.body.classList.toggle('mobile-panel-open', nextOpen);
+    if (sidebarBackdrop) {
+      sidebarBackdrop.hidden = !nextOpen;
+    }
+    if (toolsBtn) {
+      toolsBtn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+    }
+  }
+
+  function syncViewportMode() {
+    const mobile = isMobileViewport(window.innerWidth);
+    document.body.classList.toggle('is-mobile', mobile);
+    if (!mobile) {
+      setMobilePanelOpen(false);
+      return;
+    }
+    if (!mobilePanelOpen && sidebarBackdrop) {
+      sidebarBackdrop.hidden = true;
     }
   }
 
@@ -127,6 +161,7 @@ import {
   }
 
   function switchRoom(nextRoomCode) {
+    setMobilePanelOpen(false);
     applyRoomCode(nextRoomCode);
     resetLocalStateForReconnect();
     if (socket && socket.readyState <= WebSocket.OPEN) {
@@ -160,6 +195,31 @@ import {
     }
   }
 
+  async function shareRoomLink() {
+    if (!currentRoomCode) {
+      return;
+    }
+
+    const shareUrl = roomUrl(currentRoomCode);
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Bomberman Room ${currentRoomCode}`,
+          text: `Join my Bomberman room ${currentRoomCode}`,
+          url: shareUrl,
+        });
+        statusEl.textContent = `Shared room ${currentRoomCode}`;
+        return;
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          return;
+        }
+      }
+    }
+
+    await copyRoomLink();
+  }
+
   function releaseControls() {
     const hadKeyboardInput = keys.size > 0 || touchDirection !== null;
     if (!hadKeyboardInput) {
@@ -182,6 +242,12 @@ import {
 
   function onKey(event, down) {
     if (isTypingTarget(event.target) && event.code !== 'Escape') {
+      return;
+    }
+
+    if (event.code === 'Escape' && down && mobilePanelOpen) {
+      event.preventDefault();
+      setMobilePanelOpen(false);
       return;
     }
 
@@ -299,14 +365,19 @@ import {
       roundInfoEl.textContent = `Round ${round?.roundNumber || '—'}`;
     }
 
+    const mobile = isMobileViewport(window.innerWidth);
     const localPlayer = visualGame.players.find((player) => player.id === you);
     if (!localPlayer) {
-      hudInfoEl.textContent = `Room ${visualGame.roomCode || currentRoomCode} • ${visualGame.playerCount || 0} player${visualGame.playerCount === 1 ? '' : 's'} connected`;
+      hudInfoEl.textContent = mobile
+        ? `${visualGame.playerCount || 0}/${visualGame.maxPlayers || 16} players in ${visualGame.roomCode || currentRoomCode}`
+        : `Room ${visualGame.roomCode || currentRoomCode} • ${visualGame.playerCount || 0} player${visualGame.playerCount === 1 ? '' : 's'} connected`;
       return;
     }
 
     const readyBombs = Math.max(0, (localPlayer.maxBombs || 0) - (localPlayer.activeBombs || 0));
-    hudInfoEl.textContent = `Room ${visualGame.roomCode || currentRoomCode} • ${visualGame.playerCount || 0}/${visualGame.maxPlayers || 16} players • bombs ${readyBombs}/${localPlayer.maxBombs || 0} • blast ${localPlayer.bombRadius || 0} • move ${localPlayer.moveCooldownMs || 0}ms`;
+    hudInfoEl.textContent = mobile
+      ? `${visualGame.playerCount || 0}/${visualGame.maxPlayers || 16} players • bombs ${readyBombs}/${localPlayer.maxBombs || 0} • blast ${localPlayer.bombRadius || 0} • move ${localPlayer.moveCooldownMs || 0}ms`
+      : `Room ${visualGame.roomCode || currentRoomCode} • ${visualGame.playerCount || 0}/${visualGame.maxPlayers || 16} players • bombs ${readyBombs}/${localPlayer.maxBombs || 0} • blast ${localPlayer.bombRadius || 0} • move ${localPlayer.moveCooldownMs || 0}ms`;
   }
 
   function drawTile(px, py, tile, fill, innerFill) {
@@ -444,18 +515,17 @@ import {
 
     const cols = visualGame.board.width;
     const rows = visualGame.board.height;
-    const topInset = width < 900 ? 70 : 64;
-    const bottomInset = width < 900 ? 24 : 32;
-    const leftInset = width < 900 ? 20 : 280;
-    const rightInset = width < 900 ? 20 : 48;
+    const layout = computeViewportLayout(width, height);
+    const availableWidth = width - layout.leftInset - layout.rightInset;
+    const availableHeight = Math.min(height - layout.topInset - layout.bottomInset, layout.maxBoardHeight);
     const tile = Math.max(
-      18,
-      Math.floor(Math.min((width - leftInset - rightInset) / cols, (height - topInset - bottomInset) / rows))
+      layout.mode === 'mobile' ? 16 : 18,
+      Math.floor(Math.min(availableWidth / cols, availableHeight / rows))
     );
     const viewW = tile * cols;
     const viewH = tile * rows;
-    const offX = Math.floor((width - viewW + leftInset - rightInset) / 2);
-    const offY = Math.floor((height - viewH + topInset - bottomInset) / 2);
+    const offX = Math.floor((width - viewW + layout.leftInset - layout.rightInset) / 2);
+    const offY = Math.floor((height - viewH + layout.topInset - layout.bottomInset) / 2);
 
     drawBoard(visualGame, tile, offX, offY);
     drawExplosions(visualGame, tile, offX, offY);
@@ -578,6 +648,30 @@ import {
     });
   }
 
+  if (shareRoomBtn) {
+    shareRoomBtn.addEventListener('click', () => {
+      shareRoomLink();
+    });
+  }
+
+  if (toolsBtn) {
+    toolsBtn.addEventListener('click', () => {
+      setMobilePanelOpen(!mobilePanelOpen);
+    });
+  }
+
+  if (closeToolsBtn) {
+    closeToolsBtn.addEventListener('click', () => {
+      setMobilePanelOpen(false);
+    });
+  }
+
+  if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener('click', () => {
+      setMobilePanelOpen(false);
+    });
+  }
+
   if (newRoomBtn) {
     newRoomBtn.addEventListener('click', () => {
       switchRoom(createRoomCode());
@@ -626,6 +720,7 @@ import {
     };
 
     pad.addEventListener('pointerdown', (event) => {
+      setMobilePanelOpen(false);
       padPointerId = event.pointerId;
       pad.setPointerCapture(event.pointerId);
       updatePadFromPoint(event.clientX, event.clientY);
@@ -655,6 +750,7 @@ import {
 
   if (bombBtn) {
     bombBtn.addEventListener('pointerdown', (event) => {
+      setMobilePanelOpen(false);
       keys.add('Space');
       sendInput(true);
       event.preventDefault();

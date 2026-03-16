@@ -1,3 +1,10 @@
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
 html, body {
   height: 100%;
   margin: 0;
@@ -8,6 +15,14 @@ html, body {
 
 body {
   overflow: hidden;
+  overscroll-behavior: none;
+}
+
+button,
+input,
+canvas,
+label {
+  -webkit-tap-highlight-color: transparent;
 }
 
 #topbar {
@@ -20,7 +35,7 @@ body {
   grid-template-columns: minmax(160px, 220px) 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  padding: calc(10px + var(--safe-top)) calc(16px + var(--safe-right)) 10px calc(16px + var(--safe-left));
   background: rgba(2, 6, 23, 0.82);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
@@ -90,30 +105,61 @@ body {
   color: #cbd5e1;
 }
 
-#fullscreenBtn {
+#fullscreenBtn,
+.mobile-top-btn,
+.icon-btn {
   appearance: none;
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(148, 163, 184, 0.12);
   color: #fff;
   border-radius: 10px;
   height: 34px;
-  width: 34px;
   cursor: pointer;
 }
 
-#fullscreenBtn:hover {
+#fullscreenBtn,
+.icon-btn {
+  width: 34px;
+}
+
+.mobile-top-btn {
+  display: none;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+#fullscreenBtn:hover,
+.mobile-top-btn:hover,
+.icon-btn:hover {
   background: rgba(148, 163, 184, 0.2);
+}
+
+#sidebarBackdrop {
+  display: none;
 }
 
 #sidebar {
   position: fixed;
   top: 76px;
-  left: 16px;
+  left: calc(16px + var(--safe-left));
   width: 236px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  z-index: 10;
+  z-index: 26;
+}
+
+#sidebarHeader {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sidebar-title {
+  margin: 0;
 }
 
 .panel {
@@ -231,16 +277,19 @@ body {
   width: 100vw;
   height: 100vh;
   image-rendering: pixelated;
+  touch-action: none;
 }
 
 #touchControls {
   position: fixed;
-  bottom: 12px;
-  left: 12px;
-  right: 12px;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
   display: none;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
+  gap: 14px;
   pointer-events: none;
   z-index: 20;
 }
@@ -285,25 +334,114 @@ body {
 
 @media (max-width: 900px) {
   #topbar {
-    grid-template-columns: 1fr;
-    gap: 6px;
-    padding: 10px 14px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px 10px;
+    min-height: auto;
+    padding: calc(10px + var(--safe-top)) calc(12px + var(--safe-right)) 10px calc(12px + var(--safe-left));
   }
 
-  #topbar .center,
-  #topbar .right {
+  #topbar .left {
+    grid-column: 1 / 2;
+  }
+
+  #topbar .center {
+    grid-column: 1 / -1;
     justify-content: flex-start;
+    min-width: 0;
+  }
+
+  #topbar .right {
+    grid-column: 2 / 3;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  #status,
+  #roundInfo,
+  #netInfo,
+  #hudInfo,
+  #roomBadge,
+  .mobile-top-btn {
+    font-size: 11px;
   }
 
   #hudInfo {
     text-align: left;
+    max-width: none;
+    line-height: 1.25;
+  }
+
+  #netInfo,
+  #fullscreenBtn {
+    display: none;
+  }
+
+  .mobile-top-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #sidebarBackdrop {
+    position: fixed;
+    inset: 0;
+    display: block;
+    background: rgba(2, 6, 23, 0.55);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+    z-index: 24;
   }
 
   #sidebar {
-    display: none;
+    top: auto;
+    left: calc(12px + var(--safe-left));
+    right: calc(12px + var(--safe-right));
+    bottom: calc(108px + var(--safe-bottom));
+    width: auto;
+    max-height: min(62vh, 520px);
+    overflow: auto;
+    padding-bottom: 6px;
+    transform: translateY(calc(100% + 24px));
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+  }
+
+  #sidebarHeader {
+    display: flex;
+  }
+
+  body.mobile-panel-open #sidebarBackdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  body.mobile-panel-open #sidebar {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
   }
 
   #touchControls {
     display: flex;
+  }
+
+  #pad {
+    width: 156px;
+    height: 156px;
+  }
+
+  #padKnob {
+    width: 60px;
+    height: 60px;
+  }
+
+  #bombBtn {
+    width: 98px;
+    height: 98px;
+    font-size: 30px;
   }
 }
